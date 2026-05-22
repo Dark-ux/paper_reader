@@ -8,6 +8,7 @@ interface PaperListProps {
   papers: Paper[];
   selectedPaperId?: number | null;
   loading?: boolean;
+  onOpenPaper?: (paper: Paper) => void;
   onSelectPaper?: (paper: Paper) => void;
 }
 
@@ -21,6 +22,7 @@ export function PaperList({
   papers,
   selectedPaperId,
   loading = false,
+  onOpenPaper,
   onSelectPaper
 }: PaperListProps) {
   if (loading) {
@@ -42,6 +44,7 @@ export function PaperList({
           )}
           type="button"
           onClick={() => onSelectPaper?.(paper)}
+          onDoubleClick={() => onOpenPaper?.(paper)}
         >
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">

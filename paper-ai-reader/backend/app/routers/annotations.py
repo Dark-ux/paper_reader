@@ -1,10 +1,10 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlmodel import Session
 
 from app.db.session import get_session
-from app.schemas.annotation import AnnotationCreate, AnnotationRead
+from app.schemas.annotation import AnnotationCreate, AnnotationRead, AnnotationUpdate
 from app.services import annotation_service
 
 
@@ -23,3 +23,24 @@ def create_annotation(
     annotation_in: AnnotationCreate,
 ) -> AnnotationRead:
     return annotation_service.create_annotation(session, annotation_in)
+
+
+@router.patch("/{annotation_id}", response_model=AnnotationRead)
+def update_annotation(
+    session: SessionDep,
+    annotation_id: int,
+    annotation_in: AnnotationUpdate,
+) -> AnnotationRead:
+    annotation = annotation_service.get_annotation(session, annotation_id)
+    if annotation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Annotation not found")
+    return annotation_service.update_annotation(session, annotation, annotation_in)
+
+
+@router.delete("/{annotation_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_annotation(session: SessionDep, annotation_id: int) -> Response:
+    annotation = annotation_service.get_annotation(session, annotation_id)
+    if annotation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Annotation not found")
+    annotation_service.delete_annotation(session, annotation)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -1,5 +1,6 @@
-import { Check, FileUp, Search, Trash2, Upload, X } from "lucide-react";
+import { BookOpen, Check, FileUp, Search, Trash2, Upload, X } from "lucide-react";
 import { ChangeEvent, DragEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 import { listCollections } from "../api/collections";
 import { ApiError } from "../api/client";
@@ -69,6 +70,7 @@ function formatError(error: unknown) {
 }
 
 export function LibraryPage() {
+  const navigate = useNavigate();
   const [papers, setPapers] = useState<Paper[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -442,6 +444,7 @@ export function LibraryPage() {
             loading={loading}
             papers={filteredPapers}
             selectedPaperId={selectedPaperId}
+            onOpenPaper={(paper) => navigate(`/reader/${paper.id}`)}
             onSelectPaper={(paper) => setSelectedPaperId(paper.id)}
           />
         </main>
@@ -451,9 +454,16 @@ export function LibraryPage() {
             <form className="flex h-full flex-col" onSubmit={handleSave}>
               <div className="flex h-12 items-center justify-between border-b px-4">
                 <h2 className="truncate text-sm font-semibold">论文详情</h2>
-                <Button type="button" size="icon" variant="ghost" title="删除论文" onClick={handleDeleteSelected}>
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button asChild size="icon" variant="ghost" title="打开阅读器">
+                    <Link to={`/reader/${selectedPaper.id}`}>
+                      <BookOpen className="h-4 w-4" aria-hidden="true" />
+                    </Link>
+                  </Button>
+                  <Button type="button" size="icon" variant="ghost" title="删除论文" onClick={handleDeleteSelected}>
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </div>
               </div>
               <div className="grid flex-1 gap-3 overflow-auto p-4">
                 <label className="grid gap-1.5 text-sm">

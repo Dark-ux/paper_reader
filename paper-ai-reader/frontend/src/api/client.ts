@@ -1,5 +1,9 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
+export function apiPath(path: string) {
+  return `${API_BASE_URL}${path}`;
+}
+
 export class ApiError extends Error {
   status: number;
   detail: unknown;
@@ -43,7 +47,7 @@ function getErrorMessage(body: unknown, fallback: string) {
 }
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(apiPath(path), {
     headers: init?.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
     ...init
   });

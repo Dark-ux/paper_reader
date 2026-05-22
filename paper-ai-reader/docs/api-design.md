@@ -29,6 +29,12 @@
 
 - `GET /api/annotations`
 - `POST /api/annotations`
+- `GET /api/papers/{paper_id}/annotations`
+- `POST /api/papers/{paper_id}/annotations`
+- `PATCH /api/annotations/{annotation_id}`
+- `DELETE /api/annotations/{annotation_id}`
+
+Annotations are stored in SQLite only. The original PDF file is not modified.
 
 ## Collections
 

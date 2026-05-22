@@ -6,8 +6,9 @@ from sqlmodel import Session
 from app.db.session import get_session
 from app.models.collection import Collection
 from app.models.tag import Tag
+from app.schemas.annotation import AnnotationCreate, AnnotationRead, PaperAnnotationCreate
 from app.schemas.paper import PaperCreate, PaperRead, PaperUpdate
-from app.services import paper_service
+from app.services import annotation_service, paper_service
 
 
 router = APIRouter(prefix="/papers", tags=["papers"])
@@ -44,6 +45,33 @@ def read_paper(session: SessionDep, paper_id: int) -> PaperRead:
     if paper is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found")
     return _to_paper_read(session, paper)
+
+
+@router.get("/{paper_id}/annotations", response_model=list[AnnotationRead])
+def read_paper_annotations(session: SessionDep, paper_id: int) -> list[AnnotationRead]:
+    paper = paper_service.get_paper(session, paper_id)
+    if paper is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found")
+    return annotation_service.list_annotations(session, paper_id)
+
+
+@router.post(
+    "/{paper_id}/annotations",
+    response_model=AnnotationRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_paper_annotation(
+    session: SessionDep,
+    paper_id: int,
+    annotation_in: PaperAnnotationCreate,
+) -> AnnotationRead:
+    paper = paper_service.get_paper(session, paper_id)
+    if paper is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found")
+    return annotation_service.create_annotation(
+        session,
+        AnnotationCreate(**annotation_in.model_dump(), paper_id=paper_id),
+    )
 
 
 @router.patch("/{paper_id}", response_model=PaperRead)

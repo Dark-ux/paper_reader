@@ -11,6 +11,7 @@ export function App() {
       <Route element={<AppShell />}>
         <Route index element={<LibraryPage />} />
         <Route path="/reader" element={<ReaderPage />} />
+        <Route path="/reader/:paperId" element={<ReaderPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
     </Routes>
