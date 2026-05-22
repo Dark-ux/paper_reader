@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+coverage/
+
+# Local data
+data/app.db
+data/app.db-*
+data/papers/*
+data/thumbnails/*
+data/cache/*
+data/vector_index/*
+!data/papers/.gitkeep
+!data/thumbnails/.gitkeep
+!data/cache/.gitkeep
+!data/vector_index/.gitkeep
+
+# Env
+.env
+
+# Editors
+.idea/
+.vscode/
+.DS_Store
