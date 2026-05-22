@@ -1,60 +1,125 @@
 # Database Design
 
-数据库使用 SQLite，ORM 使用 SQLModel。第一阶段以单机本地数据为主，表结构保持直观，后续再根据同步、多设备或插件能力演进。
+数据库使用 SQLite，ORM 使用 SQLModel。当前阶段保持轻量，但字段命名会尽量为后续 PDF 阅读、标注、AI 精读、向量检索和自定义元数据留空间。
 
 ## papers
 
-保存 PDF 文件及其基础元数据。
+论文主表，保存 PDF 文件信息和基础元数据。
 
-- `id`: 主键
-- `title`: 标题
-- `authors`: 作者字符串，后续可拆为独立作者表
-- `abstract`: 摘要
-- `year`: 发表年份
-- `doi`: DOI
-- `file_name`: 原始文件名
-- `file_path`: 本地保存路径
-- `file_hash`: SHA-256，用于去重
-- `page_count`: 页数
-- `status`: 导入和解析状态
-- `created_at`, `updated_at`: 时间戳
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | integer primary key | 主键 |
+| `title` | string | 标题 |
+| `authors` | text | 作者，轻量版先用文本存储 |
+| `year` | integer | 年份 |
+| `journal` | string | 期刊或会议 |
+| `doi` | string | DOI |
+| `abstract` | text | 摘要 |
+| `keywords` | text | 关键词，轻量版先用文本存储 |
+| `file_path` | string | 本地 PDF 路径 |
+| `file_hash` | string | 文件 SHA-256，用于去重 |
+| `file_name` | string | 原始文件名 |
+| `file_size` | integer | 文件大小，单位 byte |
+| `page_count` | integer | PDF 页数 |
+| `reading_status` | string | 阅读状态，例如 `unread`、`reading`、`finished` |
+| `rating` | integer | 评分 |
+| `custom_fields_json` | text | 自定义扩展字段 JSON |
+| `created_at` | datetime | 创建时间 |
+| `updated_at` | datetime | 更新时间 |
+
+`custom_fields_json` 示例：
+
+```json
+{
+  "architecture": "MZI mesh",
+  "device": "MZI",
+  "energy_efficiency": "30 fJ/MAC",
+  "limitation": "thermal drift, phase error"
+}
+```
 
 ## annotations
 
-保存 PDF 阅读时产生的标注。
+PDF 标注表。不要直接修改 PDF 文件，高亮、批注和笔记全部保存在数据库中。
 
-- `paper_id`: 关联论文
-- `page_number`: 页码，使用 1-based
-- `kind`: `highlight` / `note` / `area`
-- `quote`: 被标注文本
-- `note`: 用户笔记
-- `color`: 标注颜色
-- `rects_json`: PDF 坐标区域 JSON
-
-## collections
-
-保存文献集合，支持简单父子层级。
-
-## tags
-
-保存标签名称和颜色。第一阶段可以先不做多对多关联表，等 UI 流程确定后再补。
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | integer primary key | 主键 |
+| `paper_id` | integer | 关联 `papers.id` |
+| `page_number` | integer | PDF 页码，使用 1-based |
+| `selected_text` | text | 被选中的文本 |
+| `note` | text | 用户笔记 |
+| `color` | string | 标注颜色 |
+| `position_json` | text | PDF 坐标或区域信息 JSON |
+| `annotation_type` | string | `highlight`、`note`、`area` 等 |
+| `created_at` | datetime | 创建时间 |
+| `updated_at` | datetime | 更新时间 |
 
 ## chunks
 
-保存 PDF 解析后的文本块。
+AI 精读专用文本块表，用于摘要、问答、向量检索和引用定位。
 
-- `paper_id`: 关联论文
-- `chunk_index`: 文本块序号
-- `page_start`, `page_end`: 页码范围
-- `text`: chunk 文本
-- `embedding_id`: 向量索引中的引用 ID
-- `metadata_json`: 额外元信息
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | integer primary key | 主键 |
+| `paper_id` | integer | 关联 `papers.id` |
+| `page_number` | integer | chunk 所在页码 |
+| `section_title` | string | 章节标题 |
+| `chunk_index` | integer | 在论文内的 chunk 顺序 |
+| `text` | text | chunk 文本 |
+| `token_count` | integer | 估算或实际 token 数 |
+| `embedding_id` | string | 向量索引中的 ID |
+| `created_at` | datetime | 创建时间 |
 
 ## ai_summaries
 
-保存 AI 生成内容，避免重复请求模型。
+AI 总结缓存表，避免每次打开论文都重新生成。
 
-- `paper_id`: 关联论文
-- `summary_type`: `paper_summary` / `section_summary` / `qa`
-- `model`: 使用的模型名称
-- `content`: 生成结果
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | integer primary key | 主键 |
+| `paper_id` | integer | 关联 `papers.id` |
+| `summary_type` | string | 总结类型，例如 `paper_summary`、`section_summary` |
+| `content` | text | AI 生成内容 |
+| `model_name` | string | 使用的模型名称 |
+| `prompt_version` | string | prompt 模板版本 |
+| `created_at` | datetime | 创建时间 |
+
+## tags
+
+标签表。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | integer primary key | 主键 |
+| `name` | string | 标签名 |
+| `color` | string | 标签颜色 |
+
+## paper_tags
+
+论文和标签的多对多关联表。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `paper_id` | integer | 关联 `papers.id` |
+| `tag_id` | integer | 关联 `tags.id` |
+
+## collections
+
+文献集合表，支持简单父子层级。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | integer primary key | 主键 |
+| `name` | string | 集合名称 |
+| `description` | text | 集合描述 |
+| `parent_id` | integer | 父集合 ID |
+
+## paper_collections
+
+论文和集合的多对多关联表。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `paper_id` | integer | 关联 `papers.id` |
+| `collection_id` | integer | 关联 `collections.id` |

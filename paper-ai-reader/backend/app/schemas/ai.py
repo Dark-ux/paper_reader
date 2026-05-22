@@ -13,8 +13,9 @@ class SummaryRead(SQLModel):
     id: int
     paper_id: int
     summary_type: str
-    model: str | None = None
     content: str
+    model_name: str | None = None
+    prompt_version: str | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

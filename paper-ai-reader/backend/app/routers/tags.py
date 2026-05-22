@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
@@ -22,9 +21,6 @@ def read_tags(session: SessionDep) -> list[TagRead]:
 @router.post("", response_model=TagRead, status_code=status.HTTP_201_CREATED)
 def create_tag(session: SessionDep, tag_in: TagCreate) -> TagRead:
     tag = Tag.model_validate(tag_in)
-    now = datetime.now(UTC)
-    tag.created_at = now
-    tag.updated_at = now
     session.add(tag)
     session.commit()
     session.refresh(tag)

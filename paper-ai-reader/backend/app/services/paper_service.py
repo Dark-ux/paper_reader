@@ -25,6 +25,8 @@ def list_papers(
                     Paper.title.ilike(pattern),
                     Paper.authors.ilike(pattern),
                     Paper.doi.ilike(pattern),
+                    Paper.journal.ilike(pattern),
+                    Paper.keywords.ilike(pattern),
                 )
             )
             .offset(offset)
@@ -74,8 +76,9 @@ async def import_uploaded_pdf(session: Session, upload: UploadFile) -> Paper:
         file_name=saved.file_name,
         file_path=str(saved.path),
         file_hash=saved.file_hash,
+        file_size=saved.size,
         page_count=page_count,
-        status="imported",
+        reading_status="unread",
     )
     session.add(paper)
     session.commit()

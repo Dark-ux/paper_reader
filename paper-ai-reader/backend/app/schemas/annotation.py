@@ -7,11 +7,11 @@ from sqlmodel import SQLModel
 class AnnotationCreate(SQLModel):
     paper_id: int
     page_number: int
-    kind: str = "highlight"
-    quote: str | None = None
+    selected_text: str | None = None
     note: str | None = None
     color: str = "#facc15"
-    rects_json: str | None = None
+    position_json: str | None = None
+    annotation_type: str = "highlight"
 
 
 class AnnotationRead(AnnotationCreate):

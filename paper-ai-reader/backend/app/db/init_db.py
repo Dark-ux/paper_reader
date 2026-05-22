@@ -8,6 +8,8 @@ from app.models.annotation import Annotation  # noqa: F401
 from app.models.chunk import Chunk  # noqa: F401
 from app.models.collection import Collection  # noqa: F401
 from app.models.paper import Paper  # noqa: F401
+from app.models.paper_collection import PaperCollection  # noqa: F401
+from app.models.paper_tag import PaperTag  # noqa: F401
 from app.models.tag import Tag  # noqa: F401
 
 

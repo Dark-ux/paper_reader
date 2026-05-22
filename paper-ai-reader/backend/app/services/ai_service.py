@@ -19,6 +19,7 @@ def generate_summary(session: Session, paper: Paper, request: SummaryRequest) ->
         if existing:
             return existing
 
+    prompt_version = "summary-v1"
     content = (
         f"AI summary placeholder for `{paper.title}`.\n\n"
         "Next step: extract PDF text with PyMuPDF, split it into chunks, "
@@ -27,8 +28,9 @@ def generate_summary(session: Session, paper: Paper, request: SummaryRequest) ->
     summary = AiSummary(
         paper_id=paper.id or 0,
         summary_type=request.summary_type,
-        model=settings.ai_chat_model,
         content=content,
+        model_name=settings.ai_chat_model,
+        prompt_version=prompt_version,
     )
     session.add(summary)
     session.commit()

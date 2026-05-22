@@ -30,7 +30,7 @@ export function PaperList({ papers, loading = false }: PaperListProps) {
                   {paper.authors || paper.file_name}
                 </p>
               </div>
-              <Badge className="self-start">{paper.status}</Badge>
+              <Badge className="self-start">{paper.reading_status}</Badge>
             </div>
             <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1">

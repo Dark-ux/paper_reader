@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import ClassVar
 
 from sqlmodel import Field, SQLModel
 
@@ -6,9 +7,12 @@ from app.models.paper import utc_now
 
 
 class AiSummary(SQLModel, table=True):
+    __tablename__: ClassVar[str] = "ai_summaries"
+
     id: int | None = Field(default=None, primary_key=True)
-    paper_id: int = Field(foreign_key="paper.id", index=True)
+    paper_id: int = Field(foreign_key="papers.id", index=True)
     summary_type: str = Field(default="paper_summary", index=True)
-    model: str | None = Field(default=None, index=True)
     content: str
+    model_name: str | None = Field(default=None, index=True)
+    prompt_version: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=utc_now)
