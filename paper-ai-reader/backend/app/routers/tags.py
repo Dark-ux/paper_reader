@@ -20,6 +20,9 @@ def read_tags(session: SessionDep) -> list[TagRead]:
 
 @router.post("", response_model=TagRead, status_code=status.HTTP_201_CREATED)
 def create_tag(session: SessionDep, tag_in: TagCreate) -> TagRead:
+    existing = session.exec(select(Tag).where(Tag.name == tag_in.name)).first()
+    if existing is not None:
+        return existing
     tag = Tag.model_validate(tag_in)
     session.add(tag)
     session.commit()

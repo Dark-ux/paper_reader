@@ -3,6 +3,9 @@ from datetime import datetime
 from pydantic import ConfigDict
 from sqlmodel import SQLModel
 
+from app.schemas.collection import CollectionRead
+from app.schemas.tag import TagRead
+
 
 class PaperBase(SQLModel):
     title: str
@@ -45,6 +48,8 @@ class PaperRead(PaperBase):
     file_name: str
     file_size: int
     page_count: int | None = None
+    tags: list[TagRead] = []
+    collections: list[CollectionRead] = []
     created_at: datetime
     updated_at: datetime
 

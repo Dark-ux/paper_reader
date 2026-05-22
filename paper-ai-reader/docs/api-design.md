@@ -14,7 +14,11 @@
 - `POST /api/papers`
 - `GET /api/papers/{paper_id}`
 - `PATCH /api/papers/{paper_id}`
+- `DELETE /api/papers/{paper_id}`
 - `POST /api/papers/upload`
+
+`GET /api/papers` supports `q` for basic search across `title`, `authors`, `journal`, `doi`, and `abstract`.
+`POST /api/papers/upload` returns `409 Conflict` when the same PDF hash already exists.
 
 ## PDF
 
@@ -30,11 +34,15 @@
 
 - `GET /api/collections`
 - `POST /api/collections`
+- `POST /api/papers/{paper_id}/collections/{collection_id}`
+- `DELETE /api/papers/{paper_id}/collections/{collection_id}`
 
 ## Tags
 
 - `GET /api/tags`
 - `POST /api/tags`
+- `POST /api/papers/{paper_id}/tags/{tag_id}`
+- `DELETE /api/papers/{paper_id}/tags/{tag_id}`
 
 ## AI
 

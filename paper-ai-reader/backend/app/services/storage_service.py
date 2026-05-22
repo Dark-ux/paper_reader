@@ -53,3 +53,14 @@ async def save_uploaded_paper(upload: UploadFile) -> SavedFile:
         file_hash=file_hash,
         size=total_size,
     )
+
+
+def delete_managed_paper_file(path: str | Path) -> None:
+    settings = get_settings()
+    paper_dir = settings.paper_dir.resolve()
+    target_path = Path(path).resolve()
+    try:
+        target_path.relative_to(paper_dir)
+    except ValueError:
+        return
+    target_path.unlink(missing_ok=True)

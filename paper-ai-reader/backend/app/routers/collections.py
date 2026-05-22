@@ -20,6 +20,9 @@ def read_collections(session: SessionDep) -> list[CollectionRead]:
 
 @router.post("", response_model=CollectionRead, status_code=status.HTTP_201_CREATED)
 def create_collection(session: SessionDep, collection_in: CollectionCreate) -> CollectionRead:
+    existing = session.exec(select(Collection).where(Collection.name == collection_in.name)).first()
+    if existing is not None:
+        return existing
     collection = Collection.model_validate(collection_in)
     session.add(collection)
     session.commit()
