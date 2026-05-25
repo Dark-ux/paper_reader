@@ -11,7 +11,15 @@ from app.models.paper import Paper
 from app.schemas.ai import AskResponse, Citation, SummaryRead, SummaryRequest
 
 
-NO_EVIDENCE_MESSAGE = "当前论文文本中未找到明确依据"
+NO_EVIDENCE_MESSAGE = "当前论文文本中未找到明确依据。"
+
+SYSTEM_PROMPT = """你是一个科研论文精读助手。
+无论论文原文是中文还是英文，你都必须优先用中文回答。
+除非用户明确要求英文，否则所有回答都用中文。
+回答必须严谨、简洁，并且只能基于提供的论文片段。
+关键结论必须标注页码。
+如果论文片段中没有明确依据，不要编造，必须回答“当前论文文本中未找到明确依据。”。
+如果需要保留英文术语，请采用“中文解释 + 英文术语括号标注”的形式。"""
 
 SUMMARY_PROMPT = """请基于给定论文片段，用中文总结这篇论文。
 
@@ -19,19 +27,22 @@ SUMMARY_PROMPT = """请基于给定论文片段，用中文总结这篇论文。
 1. 研究背景
 2. 要解决的问题
 3. 核心方法
-4. 系统/器件/模型结构
+4. 系统/模型/器件结构
 5. 实验流程
 6. 关键结果
 7. 主要贡献
 8. 主要局限性
-9. 适合写入综述的英文表述
+9. 可用于综述写作的表述
 10. 依据页码
 
 要求：
 - 只能基于提供的论文片段回答。
 - 不要编造原文没有的信息。
-- 关键结论后面标注 page。
-- 如果论文片段不足以支撑某一项，写“当前论文文本中未找到明确依据”。
+- 即使论文原文是英文，也必须用中文总结。
+- 除非用户明确要求英文，否则不要整段使用英文回答。
+- 可保留必要英文术语，但必须配中文解释，例如：马赫-曾德尔干涉仪（Mach-Zehnder Interferometer, MZI）。
+- 关键结论后面标注页码，例如“（第 3 页）”。
+- 如果论文片段不足以支撑某一项，写“当前论文文本中未找到明确依据。”。
 
 论文片段：
 {context}
@@ -44,8 +55,11 @@ ASK_PROMPT = """你是一个科研论文精读助手。
 1. 优先直接回答问题。
 2. 给出必要解释。
 3. 每个关键结论后面标注依据页码。
-4. 如果材料不足，明确说明“当前论文片段中没有找到明确依据”。
-5. 不要使用论文片段之外的知识进行推断，除非明确标注为“可能推测”。
+4. 即使用户用英文提问，也必须优先用中文回答。
+5. 除非用户明确要求英文，否则所有回答都用中文。
+6. 如果需要保留英文术语，请采用“中文解释 + 英文术语括号标注”的形式。
+7. 如果材料不足，明确说明“当前论文文本中未找到明确依据。”。
+8. 不要使用论文片段之外的知识进行推断，除非明确标注为“可能推测”。
 
 用户问题：
 {question}
@@ -55,9 +69,9 @@ ASK_PROMPT = """你是一个科研论文精读助手。
 """
 
 EXTRACT_PROMPTS = {
-    "method": "请只基于论文片段提取这篇论文的核心方法、模型/系统结构和实验流程。每个关键结论标注 page。",
-    "results": "请只基于论文片段提取这篇论文的关键实验结果、量化指标和主要发现。每个关键结论标注 page。",
-    "limitations": "请只基于论文片段提取这篇论文明确提到的局限性、失败案例、适用边界或未来工作。每个关键结论标注 page。",
+    "method": "请只基于论文片段，用中文提取这篇论文的核心方法、模型/系统结构和实验流程。每个关键结论标注页码。如果没有明确依据，回答“当前论文文本中未找到明确依据。”。",
+    "results": "请只基于论文片段，用中文提取这篇论文的关键实验结果、量化指标和主要发现。每个关键结论标注页码。如果没有明确依据，回答“当前论文文本中未找到明确依据。”。",
+    "limitations": "请只基于论文片段，用中文提取这篇论文明确提到的局限性、失败案例、适用边界或未来工作。每个关键结论标注页码。如果没有明确依据，回答“当前论文文本中未找到明确依据。”。",
 }
 
 
@@ -74,7 +88,7 @@ def chat_completion(prompt: str) -> ChatResult:
         return _ollama_chat(prompt)
     if provider == "openai_compatible":
         return _openai_compatible_chat(prompt)
-    raise RuntimeError(f"Unsupported LLM_PROVIDER: {settings.llm_provider}")
+    raise RuntimeError(f"不支持的 LLM_PROVIDER：{settings.llm_provider}")
 
 
 def create_embedding(text: str) -> list[float]:
@@ -84,7 +98,7 @@ def create_embedding(text: str) -> list[float]:
         return _ollama_embedding(text)
     if provider == "openai_compatible":
         return _openai_compatible_embedding(text)
-    raise RuntimeError(f"Unsupported EMBEDDING_PROVIDER: {settings.embedding_provider}")
+    raise RuntimeError(f"不支持的 EMBEDDING_PROVIDER：{settings.embedding_provider}")
 
 
 def generate_summary(session: Session, paper: Paper, request: SummaryRequest) -> SummaryRead:
@@ -169,13 +183,16 @@ def _ollama_chat(prompt: str) -> ChatResult:
                 f"{settings.ollama_base_url.rstrip('/')}/api/chat",
                 json={
                     "model": model,
-                    "messages": [{"role": "user", "content": prompt}],
+                    "messages": [
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
                     "stream": False,
                 },
             )
             response.raise_for_status()
     except httpx.HTTPError as exc:
-        raise RuntimeError(f"Ollama chat request failed: {exc}") from exc
+        raise RuntimeError(f"Ollama 对话请求失败：{exc}") from exc
     data = response.json()
     return ChatResult(content=data.get("message", {}).get("content", "").strip(), model_name=model)
 
@@ -183,7 +200,7 @@ def _ollama_chat(prompt: str) -> ChatResult:
 def _openai_compatible_chat(prompt: str) -> ChatResult:
     settings = get_settings()
     if not settings.openai_compatible_base_url:
-        raise RuntimeError("OPENAI_COMPATIBLE_BASE_URL is not configured")
+        raise RuntimeError("未配置 OPENAI_COMPATIBLE_BASE_URL")
     model = settings.openai_compatible_model or settings.ai_chat_model
     headers = {}
     api_key = settings.openai_compatible_api_key or settings.openai_api_key
@@ -196,13 +213,16 @@ def _openai_compatible_chat(prompt: str) -> ChatResult:
                 headers=headers,
                 json={
                     "model": model,
-                    "messages": [{"role": "user", "content": prompt}],
+                    "messages": [
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
                     "temperature": 0.2,
                 },
             )
             response.raise_for_status()
     except httpx.HTTPError as exc:
-        raise RuntimeError(f"OpenAI-compatible chat request failed: {exc}") from exc
+        raise RuntimeError(f"OpenAI-compatible 对话请求失败：{exc}") from exc
     data = response.json()
     return ChatResult(content=data["choices"][0]["message"]["content"].strip(), model_name=model)
 
@@ -218,17 +238,17 @@ def _ollama_embedding(text: str) -> list[float]:
             )
             response.raise_for_status()
     except httpx.HTTPError as exc:
-        raise RuntimeError(f"Ollama embedding request failed: {exc}") from exc
+        raise RuntimeError(f"Ollama 向量请求失败：{exc}") from exc
     embedding = response.json().get("embedding")
     if not isinstance(embedding, list):
-        raise RuntimeError("Ollama embedding response did not include an embedding")
+        raise RuntimeError("Ollama 向量响应中没有 embedding")
     return [float(value) for value in embedding]
 
 
 def _openai_compatible_embedding(text: str) -> list[float]:
     settings = get_settings()
     if not settings.openai_compatible_base_url:
-        raise RuntimeError("OPENAI_COMPATIBLE_BASE_URL is not configured")
+        raise RuntimeError("未配置 OPENAI_COMPATIBLE_BASE_URL")
     model = settings.embedding_model or settings.ai_embedding_model
     headers = {}
     api_key = settings.openai_compatible_api_key or settings.openai_api_key
@@ -243,7 +263,7 @@ def _openai_compatible_embedding(text: str) -> list[float]:
             )
             response.raise_for_status()
     except httpx.HTTPError as exc:
-        raise RuntimeError(f"OpenAI-compatible embedding request failed: {exc}") from exc
+        raise RuntimeError(f"OpenAI-compatible 向量请求失败：{exc}") from exc
     data = response.json()
     return [float(value) for value in data["data"][0]["embedding"]]
 

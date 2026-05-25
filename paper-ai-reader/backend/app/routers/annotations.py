@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
 from app.db.session import get_session
@@ -37,10 +37,10 @@ def update_annotation(
     return annotation_service.update_annotation(session, annotation, annotation_in)
 
 
-@router.delete("/{annotation_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_annotation(session: SessionDep, annotation_id: int) -> Response:
+@router.delete("/{annotation_id}")
+def delete_annotation(session: SessionDep, annotation_id: int) -> dict[str, bool]:
     annotation = annotation_service.get_annotation(session, annotation_id)
     if annotation is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Annotation not found")
     annotation_service.delete_annotation(session, annotation)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return {"success": True}

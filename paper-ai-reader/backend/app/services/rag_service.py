@@ -16,7 +16,7 @@ _WORD_RE = re.compile(r"[\w\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
 def build_index(session: Session, paper_id: int) -> BuildIndexResponse:
     chunks = _list_db_chunks(session, paper_id)
     if not chunks:
-        raise ValueError("No chunks found. Parse the PDF before building an AI index.")
+        raise ValueError("未找到文本块。请先解析 PDF，再建立 AI 索引。")
 
     collection_name = _collection_name(paper_id)
     collection = _get_collection(collection_name)
@@ -80,7 +80,7 @@ def format_context(citations: list[Citation]) -> str:
     blocks = []
     for citation in citations:
         blocks.append(
-            f"[chunk {citation.chunk_index}, page {citation.page_number}]\n{citation.text}"
+            f"[文本块 {citation.chunk_index}，第 {citation.page_number} 页]\n{citation.text}"
         )
     return "\n\n".join(blocks)
 

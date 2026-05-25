@@ -55,7 +55,7 @@ export function AiReadingPanel({ paperId, onGoToPage, onNoteSaved }: AiReadingPa
       const response = await buildPaperAiIndex(paperId);
       setResult({
         title: "向量索引",
-        content: `已为当前论文建立向量索引，共 ${response.indexed_chunks} 个 chunks。`,
+        content: `已为当前论文建立向量索引，共 ${response.indexed_chunks} 个文本块。`,
         citations: []
       });
     } catch (err) {
@@ -166,7 +166,7 @@ export function AiReadingPanel({ paperId, onGoToPage, onNoteSaved }: AiReadingPa
               <div className="flex flex-wrap gap-2 border-t pt-3">
                 {citationPages.map((page) => (
                   <Button key={page} type="button" size="sm" variant="outline" onClick={() => onGoToPage(page)}>
-                    page {page}
+                    第 {page} 页
                   </Button>
                 ))}
               </div>
@@ -183,7 +183,7 @@ export function AiReadingPanel({ paperId, onGoToPage, onNoteSaved }: AiReadingPa
                       type="button"
                       onClick={() => onGoToPage(citation.page_number)}
                     >
-                      <div className="mb-1 font-medium text-foreground">page {citation.page_number}</div>
+                      <div className="mb-1 font-medium text-foreground">第 {citation.page_number} 页</div>
                       <div className="line-clamp-4">{citation.text}</div>
                     </button>
                   ))}

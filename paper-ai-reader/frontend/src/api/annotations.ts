@@ -20,7 +20,7 @@ export function updateAnnotation(annotationId: number, payload: AnnotationUpdate
 }
 
 export function deleteAnnotation(annotationId: number) {
-  return request<void>(`/annotations/${annotationId}`, {
+  return request<{ success: boolean }>(`/annotations/${annotationId}`, {
     method: "DELETE"
   });
 }
