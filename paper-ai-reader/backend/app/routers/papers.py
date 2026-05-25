@@ -6,9 +6,11 @@ from sqlmodel import Session
 from app.db.session import get_session
 from app.models.collection import Collection
 from app.models.tag import Tag
+from app.schemas.ai import AiNoteCreate, AskRequest, AskResponse, BuildIndexResponse, SummaryRead, SummaryRequest
 from app.schemas.annotation import AnnotationCreate, AnnotationRead, PaperAnnotationCreate
+from app.schemas.chunk import ChunkRead, ParseResult
 from app.schemas.paper import PaperCreate, PaperRead, PaperUpdate
-from app.services import annotation_service, paper_service
+from app.services import ai_service, annotation_service, chunk_service, paper_service, rag_service
 
 
 router = APIRouter(prefix="/papers", tags=["papers"])
@@ -53,6 +55,126 @@ def read_paper_annotations(session: SessionDep, paper_id: int) -> list[Annotatio
     if paper is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found")
     return annotation_service.list_annotations(session, paper_id)
+
+
+@router.post("/{paper_id}/parse", response_model=ParseResult)
+def parse_paper(session: SessionDep, paper_id: int) -> ParseResult:
+    paper = paper_service.get_paper(session, paper_id)
+    if paper is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found")
+    try:
+        chunks = chunk_service.parse_paper(session, paper)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+    return ParseResult(
+        paper_id=paper_id,
+        chunk_count=len(chunks),
+        page_count=paper.page_count,
+        chunks=[ChunkRead.model_validate(chunk) for chunk in chunks],
+    )
+
+
+@router.get("/{paper_id}/chunks", response_model=list[ChunkRead])
+def read_paper_chunks(session: SessionDep, paper_id: int) -> list[ChunkRead]:
+    paper = paper_service.get_paper(session, paper_id)
+    if paper is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found")
+    return [ChunkRead.model_validate(chunk) for chunk in chunk_service.list_chunks(session, paper_id)]
+
+
+@router.post("/{paper_id}/ai/build-index", response_model=BuildIndexResponse)
+def build_paper_ai_index(session: SessionDep, paper_id: int) -> BuildIndexResponse:
+    paper = paper_service.get_paper(session, paper_id)
+    if paper is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found")
+    try:
+        return rag_service.build_index(session, paper_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+
+@router.post("/{paper_id}/ai/summarize", response_model=SummaryRead)
+def summarize_paper(
+    session: SessionDep,
+    paper_id: int,
+    request: SummaryRequest = SummaryRequest(),
+) -> SummaryRead:
+    paper = paper_service.get_paper(session, paper_id)
+    if paper is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found")
+    try:
+        return ai_service.generate_summary(session, paper, request)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+
+@router.post("/{paper_id}/ai/ask", response_model=AskResponse)
+def ask_paper_ai(session: SessionDep, paper_id: int, request: AskRequest) -> AskResponse:
+    paper = paper_service.get_paper(session, paper_id)
+    if paper is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found")
+    try:
+        return ai_service.answer_question(session, paper, request.question, request.max_chunks)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+
+@router.post("/{paper_id}/ai/extract-method", response_model=AskResponse)
+def extract_paper_method(session: SessionDep, paper_id: int) -> AskResponse:
+    return _extract_paper_aspect(session, paper_id, "method")
+
+
+@router.post("/{paper_id}/ai/extract-results", response_model=AskResponse)
+def extract_paper_results(session: SessionDep, paper_id: int) -> AskResponse:
+    return _extract_paper_aspect(session, paper_id, "results")
+
+
+@router.post("/{paper_id}/ai/extract-limitations", response_model=AskResponse)
+def extract_paper_limitations(session: SessionDep, paper_id: int) -> AskResponse:
+    return _extract_paper_aspect(session, paper_id, "limitations")
+
+
+@router.get("/{paper_id}/ai/summaries", response_model=list[SummaryRead])
+def read_paper_ai_summaries(session: SessionDep, paper_id: int) -> list[SummaryRead]:
+    paper = paper_service.get_paper(session, paper_id)
+    if paper is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found")
+    return ai_service.list_summaries(session, paper_id)
+
+
+@router.post("/{paper_id}/ai/notes", response_model=AnnotationRead, status_code=status.HTTP_201_CREATED)
+def save_ai_answer_as_note(
+    session: SessionDep,
+    paper_id: int,
+    note_in: AiNoteCreate,
+) -> AnnotationRead:
+    paper = paper_service.get_paper(session, paper_id)
+    if paper is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found")
+    page_number = note_in.page_number or (note_in.citation_pages[0] if note_in.citation_pages else 1)
+    return annotation_service.create_annotation(
+        session,
+        AnnotationCreate(
+            paper_id=paper_id,
+            page_number=page_number,
+            selected_text="AI 精读回答",
+            note=note_in.content,
+            color="#93c5fd",
+            annotation_type="ai_note",
+        ),
+    )
+
+
+def _extract_paper_aspect(session: Session, paper_id: int, aspect: str) -> AskResponse:
+    paper = paper_service.get_paper(session, paper_id)
+    if paper is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found")
+    try:
+        return ai_service.extract_aspect(session, paper, aspect)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
 
 @router.post(

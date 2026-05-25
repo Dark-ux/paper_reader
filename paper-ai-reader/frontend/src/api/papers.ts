@@ -1,5 +1,5 @@
 import { request } from "./client";
-import type { Paper, PaperUpdate } from "../types/paper";
+import type { Paper, PaperChunk, PaperUpdate, ParseResult } from "../types/paper";
 
 export function listPapers(query?: string) {
   const params = query ? `?q=${encodeURIComponent(query)}` : "";
@@ -30,6 +30,16 @@ export function deletePaper(paperId: number) {
   return request<void>(`/papers/${paperId}`, {
     method: "DELETE"
   });
+}
+
+export function parsePaper(paperId: number) {
+  return request<ParseResult>(`/papers/${paperId}/parse`, {
+    method: "POST"
+  });
+}
+
+export function listPaperChunks(paperId: number) {
+  return request<PaperChunk[]>(`/papers/${paperId}/chunks`);
 }
 
 export function addPaperTag(paperId: number, tagId: number) {

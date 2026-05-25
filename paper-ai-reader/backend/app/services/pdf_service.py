@@ -4,6 +4,11 @@ import re
 from pydantic import BaseModel
 
 
+class PdfPageText(BaseModel):
+    page_number: int
+    text: str
+
+
 class PdfMetadata(BaseModel):
     page_count: int
     title: str | None = None
@@ -62,9 +67,17 @@ def extract_text(path: str | Path, page_number: int | None = None) -> str:
             index = page_number - 1
             if index < 0 or index >= doc.page_count:
                 raise ValueError("page_number is out of range")
-            return doc.load_page(index).get_text()
+            return doc.load_page(index).get_text("text", sort=True)
 
         pages: list[str] = []
         for page in doc:
-            pages.append(page.get_text())
+            pages.append(page.get_text("text", sort=True))
         return "\n\n".join(pages)
+
+
+def extract_pages(path: str | Path) -> list[PdfPageText]:
+    with _open_document(path) as doc:
+        return [
+            PdfPageText(page_number=index + 1, text=page.get_text("text", sort=True))
+            for index, page in enumerate(doc)
+        ]

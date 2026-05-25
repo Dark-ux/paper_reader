@@ -4,9 +4,17 @@ from pydantic import ConfigDict
 from sqlmodel import SQLModel
 
 
+class Citation(SQLModel):
+    page_number: int
+    chunk_id: int | None = None
+    chunk_index: int
+    text: str
+
+
 class SummaryRequest(SQLModel):
     summary_type: str = "paper_summary"
     force_refresh: bool = False
+    max_chunks: int = 12
 
 
 class SummaryRead(SQLModel):
@@ -17,6 +25,7 @@ class SummaryRead(SQLModel):
     model_name: str | None = None
     prompt_version: str | None = None
     created_at: datetime
+    citations: list[Citation] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -28,4 +37,16 @@ class AskRequest(SQLModel):
 
 class AskResponse(SQLModel):
     answer: str
-    citations: list[str] = []
+    citations: list[Citation] = []
+
+
+class BuildIndexResponse(SQLModel):
+    paper_id: int
+    indexed_chunks: int
+    collection_name: str
+
+
+class AiNoteCreate(SQLModel):
+    content: str
+    page_number: int | None = None
+    citation_pages: list[int] = []

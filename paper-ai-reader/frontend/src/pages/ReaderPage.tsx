@@ -1,6 +1,7 @@
 import {
   ChevronLeft,
   ChevronRight,
+  FileText,
   Highlighter,
   Minus,
   Plus,
@@ -20,8 +21,9 @@ import {
   listPaperAnnotations,
   updateAnnotation
 } from "../api/annotations";
-import { getPaper } from "../api/papers";
+import { getPaper, parsePaper } from "../api/papers";
 import { getPdfFileUrl } from "../api/pdf";
+import { AiReadingPanel } from "../components/ai/AiReadingPanel";
 import { Button } from "../components/ui/button";
 import type { Annotation, AnnotationPosition, AnnotationRect } from "../types/annotation";
 import type { Paper } from "../types/paper";
@@ -88,6 +90,7 @@ export function ReaderPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [parsing, setParsing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -411,6 +414,35 @@ export function ReaderPage() {
     setMessage("未找到匹配文本。");
   }
 
+  async function handleParsePdf() {
+    if (!hasPaperId) {
+      return;
+    }
+    setParsing(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await parsePaper(numericPaperId);
+      setMessage(`PDF 解析完成，生成 ${result.chunk_count} 个 chunks。`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "PDF 解析失败");
+    } finally {
+      setParsing(false);
+    }
+  }
+
+  async function refreshAnnotations() {
+    if (!hasPaperId) {
+      return;
+    }
+    try {
+      setAnnotations(await listPaperAnnotations(numericPaperId));
+      setMessage("AI 回答已保存为论文笔记。");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "笔记刷新失败");
+    }
+  }
+
   if (!hasPaperId) {
     return (
       <div className="flex h-[calc(100vh-2rem)] items-center justify-center overflow-hidden rounded-lg border bg-card p-6">
@@ -477,6 +509,10 @@ export function ReaderPage() {
           </div>
           <Button type="button" variant="outline" onClick={() => void handleSearch()}>
             搜索
+          </Button>
+          <Button type="button" variant="outline" disabled={parsing} onClick={() => void handleParsePdf()}>
+            <FileText className="h-4 w-4" aria-hidden="true" />
+            {parsing ? "解析中" : "解析 PDF"}
           </Button>
           <Button type="button" disabled={!selectionDraft} onClick={() => void handleCreateHighlight()}>
             <Highlighter className="h-4 w-4" aria-hidden="true" />
@@ -626,12 +662,11 @@ export function ReaderPage() {
           </div>
         </main>
 
-        <aside className="min-h-0 overflow-hidden rounded-lg border bg-card">
-          <div className="flex h-12 items-center border-b px-4">
-            <h2 className="text-sm font-semibold">AI 精读</h2>
-          </div>
-          <div className="min-h-48" />
-        </aside>
+        <AiReadingPanel
+          paperId={numericPaperId}
+          onGoToPage={(nextPage) => goToPage(nextPage, "top")}
+          onNoteSaved={() => void refreshAnnotations()}
+        />
       </div>
     </div>
   );

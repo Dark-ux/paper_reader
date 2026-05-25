@@ -18,7 +18,13 @@ class Settings(BaseSettings):
     )
 
     ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "qwen2.5:7b"
+    llm_provider: str = "ollama"
+    embedding_provider: str = "local"
+    embedding_model: str = "bge-m3"
     openai_compatible_base_url: str = ""
+    openai_compatible_api_key: str = ""
+    openai_compatible_model: str = ""
     openai_api_key: str = ""
     ai_chat_model: str = "qwen2.5:7b"
     ai_embedding_model: str = "nomic-embed-text"

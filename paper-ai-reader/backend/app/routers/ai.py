@@ -21,7 +21,10 @@ def create_summary(
     paper = paper_service.get_paper(session, paper_id)
     if paper is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found")
-    return ai_service.generate_summary(session, paper, request)
+    try:
+        return ai_service.generate_summary(session, paper, request)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
 
 @router.post("/papers/{paper_id}/ask", response_model=AskResponse)
@@ -29,4 +32,7 @@ def ask_paper(session: SessionDep, paper_id: int, request: AskRequest) -> AskRes
     paper = paper_service.get_paper(session, paper_id)
     if paper is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found")
-    return ai_service.answer_question(session, paper, request.question, request.max_chunks)
+    try:
+        return ai_service.answer_question(session, paper, request.question, request.max_chunks)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc

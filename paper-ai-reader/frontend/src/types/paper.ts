@@ -46,3 +46,20 @@ export interface PaperUpdate {
   rating?: number | null;
   custom_fields_json?: string | null;
 }
+
+export interface PaperChunk {
+  id: number;
+  paper_id: number;
+  page_number?: number | null;
+  chunk_index: number;
+  text: string;
+  token_count: number;
+  created_at: string;
+}
+
+export interface ParseResult {
+  paper_id: number;
+  chunk_count: number;
+  page_count?: number | null;
+  chunks: PaperChunk[];
+}
