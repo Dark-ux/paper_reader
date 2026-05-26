@@ -32,3 +32,15 @@ export interface AiNoteCreate {
   page_number?: number | null;
   citation_pages: number[];
 }
+
+export interface TranslateRequest {
+  text: string;
+  source_lang: "auto" | "zh" | "en";
+  target_lang?: "zh" | "en";
+}
+
+export interface TranslateResponse {
+  source_lang: "zh" | "en";
+  target_lang: "zh" | "en";
+  translated_text: string;
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 import httpx
 from sqlmodel import Session, select
@@ -8,7 +9,7 @@ from sqlmodel import Session, select
 from app.core.config import get_settings
 from app.models.ai_summary import AiSummary
 from app.models.paper import Paper
-from app.schemas.ai import AskResponse, Citation, SummaryRead, SummaryRequest
+from app.schemas.ai import AskResponse, Citation, SummaryRead, SummaryRequest, TranslateResponse
 
 
 NO_EVIDENCE_MESSAGE = "当前论文文本中未找到明确依据。"
@@ -20,6 +21,10 @@ SYSTEM_PROMPT = """你是一个科研论文精读助手。
 关键结论必须标注页码。
 如果论文片段中没有明确依据，不要编造，必须回答“当前论文文本中未找到明确依据。”。
 如果需要保留英文术语，请采用“中文解释 + 英文术语括号标注”的形式。"""
+
+TRANSLATE_SYSTEM_PROMPT = """你是一个科研论文翻译助手。
+你的任务是做中英互译，不要进行论文问答，不要检索依据。
+只输出译文，不要解释，不要添加页码，不要回答“当前论文文本中未找到明确依据。”。"""
 
 SUMMARY_PROMPT = """请基于给定论文片段，用中文总结这篇论文。
 
@@ -74,6 +79,22 @@ EXTRACT_PROMPTS = {
     "limitations": "请只基于论文片段，用中文提取这篇论文明确提到的局限性、失败案例、适用边界或未来工作。每个关键结论标注页码。如果没有明确依据，回答“当前论文文本中未找到明确依据。”。",
 }
 
+TRANSLATE_PROMPT = """你是一个科研论文翻译助手。
+请将用户提供的文本进行中英互译。
+如果原文是英文，请翻译成准确、自然的中文。
+如果原文是中文，请翻译成准确、自然的英文。
+请保留专业术语、公式、缩写和变量名，例如 MZI、RAG、photonic neural network。
+只输出译文，不要解释。
+
+源语言：{source_lang}
+目标语言：{target_lang}
+
+需要翻译的文本：
+{text}
+"""
+
+_CHINESE_RE = re.compile(r"[\u4e00-\u9fff]")
+
 
 @dataclass
 class ChatResult:
@@ -81,13 +102,13 @@ class ChatResult:
     model_name: str
 
 
-def chat_completion(prompt: str) -> ChatResult:
+def chat_completion(prompt: str, system_prompt: str = SYSTEM_PROMPT) -> ChatResult:
     settings = get_settings()
     provider = settings.llm_provider.lower()
     if provider == "ollama":
-        return _ollama_chat(prompt)
+        return _ollama_chat(prompt, system_prompt)
     if provider == "openai_compatible":
-        return _openai_compatible_chat(prompt)
+        return _openai_compatible_chat(prompt, system_prompt)
     raise RuntimeError(f"不支持的 LLM_PROVIDER：{settings.llm_provider}")
 
 
@@ -174,7 +195,32 @@ def extract_aspect(session: Session, paper: Paper, aspect: str, max_chunks: int 
     return answer_question(session, paper, question, max_chunks)
 
 
-def _ollama_chat(prompt: str) -> ChatResult:
+def translate_text(text: str, source_lang: str = "auto", target_lang: str | None = None) -> TranslateResponse:
+    clean_text = text.strip()
+    if not clean_text:
+        raise RuntimeError("翻译文本不能为空")
+
+    detected_source = _detect_translate_source_lang(clean_text, source_lang)
+    resolved_target = target_lang or ("en" if detected_source == "zh" else "zh")
+    if detected_source == resolved_target:
+        resolved_target = "en" if detected_source == "zh" else "zh"
+
+    result = chat_completion(
+        TRANSLATE_PROMPT.format(
+            source_lang=_lang_label(detected_source),
+            target_lang=_lang_label(resolved_target),
+            text=clean_text,
+        ),
+        system_prompt=TRANSLATE_SYSTEM_PROMPT,
+    )
+    return TranslateResponse(
+        source_lang=detected_source,
+        target_lang=resolved_target,
+        translated_text=result.content.strip(),
+    )
+
+
+def _ollama_chat(prompt: str, system_prompt: str) -> ChatResult:
     settings = get_settings()
     model = settings.ollama_model or settings.ai_chat_model
     try:
@@ -184,7 +230,7 @@ def _ollama_chat(prompt: str) -> ChatResult:
                 json={
                     "model": model,
                     "messages": [
-                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt},
                     ],
                     "stream": False,
@@ -197,7 +243,7 @@ def _ollama_chat(prompt: str) -> ChatResult:
     return ChatResult(content=data.get("message", {}).get("content", "").strip(), model_name=model)
 
 
-def _openai_compatible_chat(prompt: str) -> ChatResult:
+def _openai_compatible_chat(prompt: str, system_prompt: str) -> ChatResult:
     settings = get_settings()
     if not settings.openai_compatible_base_url:
         raise RuntimeError("未配置 OPENAI_COMPATIBLE_BASE_URL")
@@ -214,7 +260,7 @@ def _openai_compatible_chat(prompt: str) -> ChatResult:
                 json={
                     "model": model,
                     "messages": [
-                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt},
                     ],
                     "temperature": 0.2,
@@ -276,6 +322,21 @@ def _summary_query(summary_type: str) -> str:
     if summary_type == "limitations":
         return EXTRACT_PROMPTS["limitations"]
     return "研究背景 问题 核心方法 模型结构 实验流程 关键结果 贡献 局限性 conclusion method results limitations"
+
+
+def _detect_translate_source_lang(text: str, source_lang: str) -> str:
+    normalized = source_lang.lower()
+    if normalized in {"zh", "en"}:
+        return normalized
+    return "zh" if _CHINESE_RE.search(text) else "en"
+
+
+def _lang_label(lang: str) -> str:
+    if lang == "zh":
+        return "中文"
+    if lang == "en":
+        return "英文"
+    return lang
 
 
 def _summary_to_read(summary: AiSummary, citations: list[Citation]) -> SummaryRead:

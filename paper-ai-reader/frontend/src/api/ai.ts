@@ -1,5 +1,12 @@
 import { request } from "./client";
-import type { AiNoteCreate, AiResponse, BuildIndexResponse, SummaryResponse } from "../types/ai";
+import type {
+  AiNoteCreate,
+  AiResponse,
+  BuildIndexResponse,
+  SummaryResponse,
+  TranslateRequest,
+  TranslateResponse
+} from "../types/ai";
 
 export function buildPaperAiIndex(paperId: number) {
   return request<BuildIndexResponse>(`/papers/${paperId}/ai/build-index`, {
@@ -41,6 +48,13 @@ export function extractPaperLimitations(paperId: number) {
 
 export function saveAiNote(paperId: number, payload: AiNoteCreate) {
   return request(`/papers/${paperId}/ai/notes`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function translateText(payload: TranslateRequest) {
+  return request<TranslateResponse>("/ai/translate", {
     method: "POST",
     body: JSON.stringify(payload)
   });

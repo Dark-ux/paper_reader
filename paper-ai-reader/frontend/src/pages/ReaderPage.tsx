@@ -10,6 +10,7 @@ import {
   listPaperAnnotations,
   updateAnnotation
 } from "../api/annotations";
+import { translateText } from "../api/ai";
 import { getPaper, parsePaper } from "../api/papers";
 import { getPdfFileUrl } from "../api/pdf";
 import { AiReadingPanel } from "../components/ai/AiReadingPanel";
@@ -20,9 +21,12 @@ import {
   type PdfScrollViewerHandle
 } from "../components/reader/PdfScrollViewer";
 import { ReaderToolbar } from "../components/reader/ReaderToolbar";
+import { SelectionTranslatePopover } from "../components/reader/SelectionTranslatePopover";
 import { Button } from "../components/ui/button";
+import type { TranslateResponse } from "../types/ai";
 import type { Annotation, AnnotationPosition, AnnotationRect } from "../types/annotation";
 import type { Paper } from "../types/paper";
+import { detectSelectionLanguage, getSelectionAnchor } from "../utils/useTextSelection";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 
@@ -51,6 +55,7 @@ export function ReaderPage() {
   const numericPaperId = Number(paperId);
   const hasPaperId = Number.isFinite(numericPaperId) && numericPaperId > 0;
   const viewerRef = useRef<PdfScrollViewerHandle | null>(null);
+  const translationRequestRef = useRef(0);
 
   const [paper, setPaper] = useState<Paper | null>(null);
   const [pdfDocument, setPdfDocument] = useState<any | null>(null);
@@ -62,6 +67,11 @@ export function ReaderPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<number | null>(null);
   const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(null);
+  const [translationPosition, setTranslationPosition] = useState<{ x: number; y: number } | null>(null);
+  const [translationOriginal, setTranslationOriginal] = useState("");
+  const [translationResult, setTranslationResult] = useState<TranslateResponse | null>(null);
+  const [translationLoading, setTranslationLoading] = useState(false);
+  const [translationError, setTranslationError] = useState<string | null>(null);
   const [loadingPaper, setLoadingPaper] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -162,9 +172,55 @@ export function ReaderPage() {
   }, []);
 
   const handleTextSelection = useCallback((page: number, text: string, rects: AnnotationRect[]) => {
-    setSelectionDraft({ pageNumber: page, text, rects });
+    const trimmed = text.trim();
+    if (trimmed.length < 2) {
+      return;
+    }
+
+    setSelectionDraft({ pageNumber: page, text: trimmed, rects });
     setMessage("已选中文本，可以添加高亮。");
+    setTranslationOriginal(trimmed);
+    setTranslationPosition(getSelectionAnchor());
+    setTranslationResult(null);
+    setTranslationError(null);
+    setTranslationLoading(true);
+
+    const requestId = translationRequestRef.current + 1;
+    translationRequestRef.current = requestId;
+    const { sourceLang, targetLang } = detectSelectionLanguage(trimmed);
+    translateText({
+      text: trimmed,
+      source_lang: sourceLang,
+      target_lang: targetLang
+    })
+      .then((response) => {
+        if (translationRequestRef.current !== requestId) {
+          return;
+        }
+        setTranslationResult(response);
+      })
+      .catch(() => {
+        if (translationRequestRef.current !== requestId) {
+          return;
+        }
+        setTranslationError("翻译失败，请检查 AI 模型服务是否启动。");
+      })
+      .finally(() => {
+        if (translationRequestRef.current !== requestId) {
+          return;
+        }
+        setTranslationLoading(false);
+      });
   }, []);
+
+  function closeTranslationPopover() {
+    translationRequestRef.current += 1;
+    setTranslationPosition(null);
+    setTranslationOriginal("");
+    setTranslationResult(null);
+    setTranslationError(null);
+    setTranslationLoading(false);
+  }
 
   async function handleCreateHighlight() {
     if (!hasPaperId || !selectionDraft) {
@@ -297,6 +353,43 @@ export function ReaderPage() {
     }
   }
 
+  async function handleCopyTranslation() {
+    if (!translationResult) {
+      return;
+    }
+    await navigator.clipboard.writeText(translationResult.translated_text);
+    setMessage("译文已复制。");
+  }
+
+  async function handleSaveTranslationNote() {
+    if (!hasPaperId || !selectionDraft || !translationResult) {
+      return;
+    }
+
+    const position: AnnotationPosition = {
+      page: selectionDraft.pageNumber,
+      rects: selectionDraft.rects,
+      scale
+    };
+
+    try {
+      const annotation = await createPaperAnnotation(numericPaperId, {
+        page_number: selectionDraft.pageNumber,
+        selected_text: selectionDraft.text,
+        note: `原文：\n${selectionDraft.text}\n\n译文：\n${translationResult.translated_text}`,
+        color: "#93c5fd",
+        position_json: JSON.stringify(position),
+        annotation_type: "translation_note"
+      });
+      setAnnotations((current) => [...current, annotation].sort((a, b) => a.page_number - b.page_number));
+      setSelectedAnnotationId(annotation.id);
+      setMessage("翻译已保存为笔记。");
+      closeTranslationPopover();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存翻译笔记失败");
+    }
+  }
+
   if (!hasPaperId) {
     return (
       <div className="flex h-[calc(100vh-2rem)] items-center justify-center overflow-hidden rounded-lg border bg-card p-6">
@@ -312,7 +405,7 @@ export function ReaderPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-2rem)] flex-col gap-3 overflow-hidden">
+    <div className="flex h-[calc(100vh-2rem)] flex-col gap-3 overflow-hidden" onMouseDown={closeTranslationPopover}>
       <ReaderToolbar
         title={paper?.title ?? "PDF 阅读器"}
         pageNumber={pageNumber}
@@ -373,6 +466,17 @@ export function ReaderPage() {
           onNoteSaved={() => void refreshAnnotations()}
         />
       </div>
+
+      <SelectionTranslatePopover
+        originalText={translationOriginal}
+        result={translationResult}
+        loading={translationLoading}
+        error={translationError}
+        position={translationPosition}
+        onCopy={() => void handleCopyTranslation()}
+        onSave={() => void handleSaveTranslationNote()}
+        onClose={closeTranslationPopover}
+      />
 
       <AnnotationEditDialog
         annotation={selectedAnnotation}

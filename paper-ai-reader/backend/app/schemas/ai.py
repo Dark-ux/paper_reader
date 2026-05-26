@@ -50,3 +50,15 @@ class AiNoteCreate(SQLModel):
     content: str
     page_number: int | None = None
     citation_pages: list[int] = []
+
+
+class TranslateRequest(SQLModel):
+    text: str
+    source_lang: str = "auto"
+    target_lang: str | None = None
+
+
+class TranslateResponse(SQLModel):
+    source_lang: str
+    target_lang: str
+    translated_text: str
